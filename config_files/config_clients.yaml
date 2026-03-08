@@ -1,0 +1,76 @@
+
+common_columns:
+  - 'date'
+  - 'product_code'
+  - 'quantity_sold'
+  - 'revenue_before'
+  - 'revenue_after'
+  - 'product_selling_price'
+  - 'calculated_price'
+  - 'calculated_price_after_discount'
+  - 'promotion_indicator'
+  - 'product_status'
+  - 'number_of_stores'
+  
+  #- price
+
+shared_data: 's3://prime-rel-ml/data-analytics/price-elasticity/data/'
+
+clients:
+    spar:
+        price_column: 'calculated_price_after_discount'
+        extra_columns:
+             - 'category_name_level1'
+             - 'category_name_level2'
+             - 'category_name_level3'
+             - 'ah_price'
+             - 'ah_content_factor'
+             - 'ah_to_go_price'
+             - 'ah_to_go_content_factor'
+             - 'plus_price'
+             - 'plus_content_factor'
+             - 'brand_name'
+        pricelines: ['Buurt', 'Enjoy', 'Neutraal', 'Highway', 'City']
+
+        special_features:
+            competitors: ['ah', 'ah_to_go', 'plus']
+            competitor_info: False
+            category: 'category_name_level2'
+            prods_per_category: 50
+            price_grid_days: 1
+
+        s3_dir: 
+            s3: 's3://'
+            bucket: 'prime-rel-ml/'
+            prefix: 'data-analytics/price-elasticity/spar/data/'
+            name: 'preprocessed_data.parquet'
+            
+
+
+    hoogvliet:
+        price_column: 'calculated_price_after_discount'
+        extra_columns:
+            - 'ah_price'
+            - 'ah_content_factor'
+            - 'jumbo_price'
+            - 'jumbo_content_factor'
+            - 'dirk_price'
+            - 'dirk_content_factor'
+            - 'category_name_level3'
+
+
+        special_features:
+            competitors: ['ah', 'jumbo', 'dirk']
+            competitor_info: False
+            category: 'category_name_level3'
+            prods_per_category: 100
+            price_grid_days: 1
+            
+        s3_dir: 
+            s3: 's3://'
+            bucket: 'prime-rel-ml/'
+            prefix: 'data-analytics/price-elasticity/hoogvliet/data/'
+            name: 'preprocessed_data.parquet'
+            data_source: 'raw_data.parquet'
+    
+

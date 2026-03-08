@@ -1,0 +1,26 @@
+clients:
+    spar:
+        category: 'category_name_level2'
+        price_column: 'calculated_price_after_discount'
+        prods_per_category: 10
+        pricelines: ['Buurt', 'Enjoy', 'Neutraal', 'Highway', 'City']
+        s3_dir: 
+            s3: 's3://'
+            bucket: 'prime-rel-ml/'
+            output_prefix: 'data-analytics/price-elasticity/spar/pe_results/'
+            data_prefix: 'data-analytics/price-elasticity/spar/data/'
+            name: 'elasticities.parquet'
+            estimations: 'estimations.parquet'
+
+
+    hoogvliet:
+        category: 'category_name_level3'
+        price_column: 'calculated_price_after_discount'
+        prods_per_category: 10
+        s3_dir: 
+            s3: 's3://'
+            bucket: 'prime-rel-ml/'
+            output_prefix: 'data-analytics/price-elasticity/hoogvliet/pe_results/'
+            data_prefix: 'data-analytics/price-elasticity/hoogvliet/data/'
+            name: 'elasticities.parquet'
+            estimations: 'estimations.parquet'

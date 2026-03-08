@@ -1,0 +1,37 @@
+test_size: 50000
+n_trials: 100
+target: 'quantity_sold'
+price_grid_days: 1
+
+clients:
+    spar:
+        n_splits: 3
+        price_column: 'calculated_price_after_discount'
+        local_dir_model: '/root/price-elasticity/saved_model/spar/trained_model.joblib'
+        pricelines: ['Buurt', 'Enjoy', 'Neutraal', 'Highway', 'City']
+        s3_dir: 
+            s3: 's3://'
+            bucket: 'prime-rel-ml/'
+            model_prefix: 'data-analytics/price-elasticity/spar/model/'
+            data_prefix: 'data-analytics/price-elasticity/spar/data/'
+            feature_data: 'feature_data.parquet'
+            name: 'trained_model.joblib'
+            estimations: 'estimations.parquet'
+            price_grid: 'price_grid.pkl'
+            price_grid_real: 'price_grid_real.pkl'
+            
+
+    hoogvliet:
+        n_splits: 3
+        price_column: 'calculated_price_after_discount'
+        local_dir_model: '/root/price-elasticity/saved_model/hoogvliet/trained_model.joblib'
+        s3_dir: 
+            s3: 's3://'
+            bucket: 'prime-rel-ml/'
+            model_prefix: 'data-analytics/price-elasticity/hoogvliet/model/'
+            data_prefix: 'data-analytics/price-elasticity/hoogvliet/data/'
+            feature_data: 'feature_data.parquet'
+            name: 'trained_model.joblib'
+            estimations: 'estimations.parquet'
+            price_grid: 'price_grid.pkl'
+

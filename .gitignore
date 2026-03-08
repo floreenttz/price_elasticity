@@ -1,0 +1,10 @@
+*.parquet
+*.joblib
+*.pyc
+__pycache__/
+.DS_Store
+*.tar.gz
+downloads/
+logs/
+notebooks/
+.ipynb_checkpoints/

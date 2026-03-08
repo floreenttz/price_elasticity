@@ -1,0 +1,59 @@
+precalculated_features:
+  - 'product_code'
+  - 'adjusted_price'
+  - 'promotion_indicator'
+  - 'cpi'
+  - 'number_of_stores'
+  - 'category_name_level3'
+  - 'calculated_price_after_discount'
+  
+target: 'quantity_sold'
+out_of_stock_days: 7
+ignore_out_of_stock_days: 2
+clients:
+    spar:
+        price_column: 'calculated_price_after_discount'
+        extra_columns:
+            - 'category_name_level1'
+            - 'category_name_level2'
+            - 'brand_name'
+
+        pricelines: ['Buurt', 'Enjoy', 'Neutraal', 'Highway', 'City']
+        special_features:
+            competitor_info: False
+            lag_columns: ['calculated_price_after_discount']
+            lags: True
+
+        s3_dir: 
+            s3: 's3://'
+            bucket: 'prime-rel-ml/'
+            prefix: 'data-analytics/price-elasticity/spar/data/'
+            name: 'feature_data.parquet'
+            preprocessed_data: 'preprocessed_data.parquet'
+            weather: 's3://prime-rel-ml/data-analytics/price-elasticity/data/clean_weather.parquet'
+            
+
+
+    hoogvliet:
+        price_column: 'calculated_price_after_discount'
+        extra_columns:
+            - 'ah_price'
+            - 'jumbo_price'
+            - 'dirk_price'
+        
+        
+        special_features:
+            competitor_info: True
+            lag_columns: ['calculated_price_after_discount']
+            lags: True
+      
+        s3_dir: 
+            s3: 's3://'
+            bucket: 'prime-rel-ml/'
+            prefix: 'data-analytics/price-elasticity/hoogvliet/data/'
+            name: 'feature_data.parquet'
+            preprocessed_data: 'preprocessed_data.parquet'
+            weather: 's3://prime-rel-ml/data-analytics/price-elasticity/data/clean_weather.parquet'
+            
+      
+    

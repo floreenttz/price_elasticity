@@ -1,0 +1,55 @@
+client_name: 'spar'
+priceline_name: 'Highway'
+price_grid_freq: 1
+price_column: 'product_selling_price'
+target: 'quantity_sold'
+competitors: ['ah', 'plus']
+competitor_info: True
+category: 'category_name_level2'
+    
+# Data preprocessing
+filters:
+    filter_product_status: False
+    filter_live_products: True
+    filter_sufficient_price_levels: False
+    sufficient_price_levels: 10
+    filter_low_selling_products: False
+    min_sales: 50
+    cpi: True
+    
+# Feature Engineering
+out_of_stock_days: 7
+ignore_out_of_stock_days: 2
+price_lags: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28] #, 90, 180, 365
+price_change_columns: ['product_selling_price'] #'adjusted_price_category', 'product_selling_price', 
+min_grid_perc: -10
+max_grid_perc: 10
+# Modeling
+test_size: 5000
+n_splits: 3
+optuna: False
+optuna_trials: 250
+
+# Elasticity
+prods_per_category: 1
+
+# S3 data
+s3_dir: 
+    s3: 's3://'
+    bucket: 'prime-rel-ml/'
+    data_prefix: 'data-analytics/price-elasticity/spar/data/'
+    model_prefix: 'data-analytics/price-elasticity/spar/model/'
+    output_prefix: 'data-analytics/price-elasticity/spar/pe_results/'
+    feature_data: 'feature_data.parquet'
+    feature_data_weekly: 'feature_data_weekly.parquet'
+    preprocessed_data: 'preprocessed_data.parquet'
+    preprocessed_data_weekly: 'preprocessed_data_weekly.parquet'
+    weather: 's3://prime-rel-ml/data-analytics/price-elasticity/data/clean_weather.parquet'
+    model: 'trained_model.joblib'
+    price_grid: 'price_grid.pkl'
+    estimations_weekly: 'estimations_weekly.parquet'
+    estimations: 'estimations.parquet'
+    elasticities: 'elasticities.parquet'
+    elasticities_weekly: 'elasticities_weekly.parquet'
+    
+data_folder: 's3://prime-rel-ml/data-analytics/price-elasticity/data/'
