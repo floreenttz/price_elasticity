@@ -34,6 +34,11 @@ from scripts.pipeline.features import FeatureEngineer
 from scripts.pipeline.modeling import DemandModel
 from scripts.pipeline.elasticity import ElasticityCalculator
 
+# Registry mapping client names to factory functions.
+CLIENT_REGISTRY = {
+    "hoogvliet": lambda priceline: HoogvlietAdapter(),
+    "spar": lambda priceline: SparAdapter(priceline=priceline)
+}
 
 def load_config(config_path: str) -> dict:
     """Load configuration from YAML file."""
@@ -43,14 +48,12 @@ def load_config(config_path: str) -> dict:
 
 def get_client(client_name: str, priceline: str | None = None):
     """Get the appropriate client adapter."""
-    if client_name == "hoogvliet":
-        return HoogvlietAdapter()
-    elif client_name == "spar":
-        if priceline is None:
-            raise ValueError("Spar requires a priceline (e.g., 'Enjoy', 'City')")
-        return SparAdapter(priceline=priceline)
-    else:
-        raise ValueError(f"Unknown client: {client_name}")
+    if client_name not in CLIENT_REGISTRY: 
+        raise ValueError(f"Unknown client: '{client_name}'. Available: {list(CLIENT_REGISTRY)}")
+    if client_name == "spar" and priceline is None: 
+        raise ValueError("Spar requires a priceline (e.g. 'Enjoy', 'City')")
+    return CLIENT_REGISTRY[client_name](priceline)
+
 
 
 def get_storage(local: bool = False, base_path: str = ".", bucket: str | None = None):
@@ -232,7 +235,7 @@ Examples:
         "--client",
         type=str,
         required=True,
-        choices=["hoogvliet", "spar"],
+        choices=list(CLIENT_REGISTRY.keys()),
         help="Client name",
     )
     parser.add_argument(

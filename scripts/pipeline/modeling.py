@@ -374,7 +374,6 @@ class DemandModel:
             "product_code": self.predict_df["product_code"],
             "predicted_quantity": y_pred,
             f"{self.price_column}_calc": self.predict_df[self.price_column],
-            "sequence_number": self.predict_df["sequence_number"],
         })
 
         # Sum predicted quantities across all days per (product, simulated price)
@@ -385,21 +384,18 @@ class DemandModel:
             .reset_index()
         )
 
-        # Get actual prices for comparison
-        last_days = (
+        # Get last actual price per product (one row per product)
+        last_price = (
             self.data.sort_values(["product_code", "date"])
-            .groupby("product_code")
-            .tail(self.price_grid_freq)
+            .groupby("product_code")[self.price_column]
+            .last()
+            .reset_index()
         )
 
-        # Add sequence numbers to match
-        last_days = last_days.reset_index(drop=True)
-        last_days["sequence_number"] = last_days.groupby("product_code").cumcount()
-
-        # Merge actual prices
+        # Merge actual prices 
         self.predictions_df = self.predictions_df.merge(
-            last_days[["product_code", self.price_column, "sequence_number"]],
-            on=["product_code", "sequence_number"],
+            last_price,
+            on="product_code",
             how="left",
             suffixes=["_calc", "_real"],
         )
