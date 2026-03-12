@@ -19,7 +19,7 @@ from tqdm import tqdm
 
 from ..clients.base import ClientAdapter
 from ..storage.base import Storage
-from ..functions import rename_columns, remove_outliers
+from ..functions import rename_columns, remove_outliers, interpolate_cpi
 
 
 def get_logger(name: str = "preprocessing") -> logging.Logger:
@@ -362,18 +362,30 @@ class DataPreprocessor:
     # -------------------------------------------------------------------------
 
     def _calculate_cpi(self) -> None:
-        """Calculate CPI-adjusted prices."""
+        """Merge daily CPI into data and filter to dates where CPI is available."""
         self.logger.info("Calculating CPI adjustments...")
 
-        # Load CPI data via client adapter
         cpi_data = self.client.get_cpi_data(self.config, self.storage)
         if cpi_data is None:
             self.logger.info("CPI data not available, skipping")
             return
+            
+        # Interpolate monthly CPI to daily granularity
+        cpi_daily = interpolate_cpi(cpi_data)
 
-        # Basic CPI merge (simplified - the original has more complex logic)
-        # This would need to be expanded based on actual CPI calculation needs
-        self.logger.info("CPI calculation completed")
+        # Filter data to only dates covered by CPI
+        max_cpi_date = cpi_daily['date'].max()
+        before = len(self.data)
+        self.data = self.data[self.data['date'] <= max_cpi_date]
+        self.logger.info(
+            f"Filtered to CPI coverage (up to {max_cpi_date.date()}): "     
+            f"removed {before - len(self.data)} rows"
+        )
+
+        # Merge CPI into data
+        self.data = self.data.merge(cpi_daily, on='date', how='left')
+        self.logger.info("CPI merged into data")
+        
 
     # -------------------------------------------------------------------------
     # Column Management

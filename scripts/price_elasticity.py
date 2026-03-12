@@ -185,137 +185,137 @@ class Price_Elasticity:
         price = np.asarray(price, dtype=float)
         return np.exp(a) * np.power(price, b)
 
-#     @staticmethod
-#     def demand_curve(group):
-#         """
-#         Fits a Richards growth curve to the given group's data and returns the fitted curve.
-
-#         Parameters:
-#         group : DataFrame
-#             A DataFrame containing e.g 'calculated_price_calc' and 'predict_sales' columns, 
-#             representing the adjusted prices and corresponding predicted sales.
-
-#         Returns:
-#         DataFrame
-#             A DataFrame containing the original product code, the adjusted prices, and the 
-#             sales predicted by the fitted Richards growth curve. Returns an empty DataFrame 
-#             in case of an error during curve fitting.
-#         """
-#         if group.empty:
-#             print("Empty group passed to demand_curve.")
-#             return pd.DataFrame()
-
-#         initial_guess = [
-#             np.max(group["predict_sales"]),
-#             1,
-#             np.min(group[f"product_selling_price_calc"]),
-#             0.5,
-#         ]
-        
-#         # Suppress warnings
-#         with warnings.catch_warnings():
-#             warnings.simplefilter('ignore')
-
-#             try:
-#                 # Curve fitting
-#                 params, _ = curve_fit(
-#                     Price_Elasticity.richards_growth,
-#                     group[f"product_selling_price_calc"],
-#                     group["predict_sales"],
-#                     p0=initial_guess,
-#                     maxfev=10000,
-#                 )
-
-#                 # Calculate the curve fit using the estimated parameters
-#                 curve_fit_data = Price_Elasticity.richards_growth(
-#                     group[f"product_selling_price_calc"], *params
-#                 )
-#                 # **Change 1: Added a Named Function Instead of Lambda**
-# #                 def fitted_curve(x):
-# #                     return PriceElasticity.richards_growth(x, *params)
-
-# #                 # **Change 2: Use the named function to calculate curve_fit_data**
-# #                 # Calculate the curve fit using the estimated parameters
-# #                 curve_fit_data = fitted_curve(group["calculated_price_after_discount_calc"])
-
-#                 if (curve_fit_data.var() >= 0) & (curve_fit_data.var() < 1):
-
-#                     # Curve fitting
-#                     params, _ = curve_fit(
-#                         Price_Elasticity.richards_growth,
-#                         group[f"product_selling_price_calc"],
-#                         group["predict_sales"],
-#                         maxfev=100000,
-#                     )
-
-#                     # Calculate the curve fit using the estimated parameters
-#                     curve_fit_data = Price_Elasticity.richards_growth(
-#                         group[f"product_selling_price_calc"], *params
-#                     )
-#                 # Add the data to the result DataFrame
-#                 result_data = pd.DataFrame(
-#                     {
-#                         "product_code_elasticity": group["product_code"].values[0],
-#                         "price": group[f"product_selling_price_calc"],
-#                         "sales": curve_fit_data,
-#                     }
-#                 )
-
-#                 return result_data
-#             except Exception as e:
-#                 # self.logger.info(f"Error processing product {group['product_code'].values[0]}: {e}")
-#                 return pd.DataFrame()
-
     @staticmethod
     def demand_curve(group):
         """
-        Fits a log-log regression (power-law) demand curve:
-            log(Q) = a + b*log(P)
-        Returns a DataFrame with fitted sales for the group's prices.
+        Fits a Richards growth curve to the given group's data and returns the fitted curve.
+
+        Parameters:
+        group : DataFrame
+            A DataFrame containing e.g 'calculated_price_calc' and 'predict_sales' columns, 
+            representing the adjusted prices and corresponding predicted sales.
+
+        Returns:
+        DataFrame
+            A DataFrame containing the original product code, the adjusted prices, and the 
+            sales predicted by the fitted Richards growth curve. Returns an empty DataFrame 
+            in case of an error during curve fitting.
         """
         if group.empty:
             print("Empty group passed to demand_curve.")
             return pd.DataFrame()
-    
-        # Keep only valid rows for log transforms
-        g = group.copy()
-        g = g[(g["predict_sales"] > 0) & (g["product_selling_price_calc"] > 0)]
-        if g.empty:
-            return pd.DataFrame()
-    
+
+        initial_guess = [
+            np.max(group["predict_sales"]),
+            1,
+            np.min(group[f"product_selling_price_calc"]),
+            0.5,
+        ]
+        
+        # Suppress warnings
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-    
+            warnings.simplefilter('ignore')
+
             try:
-                x = np.log(g["product_selling_price_calc"].astype(float).values)
-                y = np.log(g["predict_sales"].astype(float).values)
-    
-                # Linear regression in log space: y = a + b*x
-                # np.polyfit returns [b, a]
-                b, a = np.polyfit(x, y, 1)
-    
-                # Predict for original group's prices (only where price > 0)
-                prices_all = group["product_selling_price_calc"].astype(float).values
-                curve_fit_data = np.full(shape=len(prices_all), fill_value=np.nan, dtype=float)
-    
-                mask_price_pos = prices_all > 0
-                curve_fit_data[mask_price_pos] = np.exp(a + b * np.log(prices_all[mask_price_pos]))
-    
+                # Curve fitting
+                params, _ = curve_fit(
+                    Price_Elasticity.richards_growth,
+                    group[f"product_selling_price_calc"],
+                    group["predict_sales"],
+                    p0=initial_guess,
+                    maxfev=10000,
+                )
+
+                # Calculate the curve fit using the estimated parameters
+                curve_fit_data = Price_Elasticity.richards_growth(
+                    group[f"product_selling_price_calc"], *params
+                )
+                # **Change 1: Added a Named Function Instead of Lambda**
+#                 def fitted_curve(x):
+#                     return PriceElasticity.richards_growth(x, *params)
+
+#                 # **Change 2: Use the named function to calculate curve_fit_data**
+#                 # Calculate the curve fit using the estimated parameters
+#                 curve_fit_data = fitted_curve(group["calculated_price_after_discount_calc"])
+
+                if (curve_fit_data.var() >= 0) & (curve_fit_data.var() < 1):
+
+                    # Curve fitting
+                    params, _ = curve_fit(
+                        Price_Elasticity.richards_growth,
+                        group[f"product_selling_price_calc"],
+                        group["predict_sales"],
+                        maxfev=100000,
+                    )
+
+                    # Calculate the curve fit using the estimated parameters
+                    curve_fit_data = Price_Elasticity.richards_growth(
+                        group[f"product_selling_price_calc"], *params
+                    )
+                # Add the data to the result DataFrame
                 result_data = pd.DataFrame(
                     {
                         "product_code_elasticity": group["product_code"].values[0],
-                        "price": group["product_selling_price_calc"],
+                        "price": group[f"product_selling_price_calc"],
                         "sales": curve_fit_data,
                     }
                 )
-    
-                # If you want: drop rows where we couldn't compute (price<=0)
-                result_data = result_data.dropna(subset=["sales"])
-    
+
                 return result_data
-    
-            except Exception:
+            except Exception as e:
+                # self.logger.info(f"Error processing product {group['product_code'].values[0]}: {e}")
                 return pd.DataFrame()
+
+    # @staticmethod
+    # def demand_curve(group):
+    #     """
+    #     Fits a log-log regression (power-law) demand curve:
+    #         log(Q) = a + b*log(P)
+    #     Returns a DataFrame with fitted sales for the group's prices.
+    #     """
+    #     if group.empty:
+    #         print("Empty group passed to demand_curve.")
+    #         return pd.DataFrame()
+    
+    #     # Keep only valid rows for log transforms
+    #     g = group.copy()
+    #     g = g[(g["predict_sales"] > 0) & (g["product_selling_price_calc"] > 0)]
+    #     if g.empty:
+    #         return pd.DataFrame()
+    
+    #     with warnings.catch_warnings():
+    #         warnings.simplefilter("ignore")
+    
+    #         try:
+    #             x = np.log(g["product_selling_price_calc"].astype(float).values)
+    #             y = np.log(g["predict_sales"].astype(float).values)
+    
+    #             # Linear regression in log space: y = a + b*x
+    #             # np.polyfit returns [b, a]
+    #             b, a = np.polyfit(x, y, 1)
+    
+    #             # Predict for original group's prices (only where price > 0)
+    #             prices_all = group["product_selling_price_calc"].astype(float).values
+    #             curve_fit_data = np.full(shape=len(prices_all), fill_value=np.nan, dtype=float)
+    
+    #             mask_price_pos = prices_all > 0
+    #             curve_fit_data[mask_price_pos] = np.exp(a + b * np.log(prices_all[mask_price_pos]))
+    
+    #             result_data = pd.DataFrame(
+    #                 {
+    #                     "product_code_elasticity": group["product_code"].values[0],
+    #                     "price": group["product_selling_price_calc"],
+    #                     "sales": curve_fit_data,
+    #                 }
+    #             )
+    
+    #             # If you want: drop rows where we couldn't compute (price<=0)
+    #             result_data = result_data.dropna(subset=["sales"])
+    
+    #             return result_data
+    
+    #         except Exception:
+    #             return pd.DataFrame()
 
     @log_decorator
     def calculate_demand_curve(self):
@@ -360,134 +360,134 @@ class Price_Elasticity:
             self.logger.info("Error calculating the demand curve: %s", str(e))
             raise e
 
-    # @log_decorator
-    # def calculate_demand_curve_product(self, product):
-    #     """
-    #     This method calculates the demand curve for a single product and plots it using Plotly Express.
-
-    #     Parameters:
-    #     - product (str): The product code for which the demand curve is to be calculated.
-
-    #     Steps:
-    #     1. Extract data for the specified product.
-    #     2. Perform curve fitting using the Richards growth function.
-    #     3. Plot the original sales data and the fitted demand curve using Plotly Express.
-    #     """
-    #     try:
-    #         self.logger.info("Calculating demand curve for one product...")
-            
-    #         product = self.estimations[self.estimations["product_code"] == product].reset_index(drop=True)
-            
-    #         price = product[f"product_selling_price_calc"]
-    #         quantity_sold = product.predict_sales
-    #         initial_guess = [np.max(quantity_sold), 1, np.min(price), 0.5]
-
-    #         # Curve fitting
-    #         params, _ = curve_fit(
-    #             Price_Elasticity.richards_growth,
-    #             price,
-    #             quantity_sold,
-    #             p0=initial_guess,
-    #             maxfev=100000,
-    #         )
-
-    #         # Calculate the curve fit using the estimated parameters
-    #         curve_fit_data = Price_Elasticity.richards_growth(price, *params)
-
-    #         if (curve_fit_data.var() >= 0) & (curve_fit_data.var() < 1):
-    #             # Curve fitting
-    #             params, _ = curve_fit(
-    #                 Price_Elasticity.richards_growth, price, quantity_sold, maxfev=100000
-    #             )
-
-    #             # Calculate the curve fit using the estimated parameters
-    #             curve_fit_data = Price_Elasticity.richards_growth(price, *params)
-                
-    #         curve_fit_df = {'Price': price, 'Quantity Sold': curve_fit_data}
-
-    #         # Plot the original data
-    #         fig = px.scatter(
-    #             product,
-    #             x=self.price_column + "_calc",
-    #             y="predict_sales",
-    #             labels={"Quantity Sold": "Quantity Sold"},
-    #             title="Original Data vs Curve Fit",
-    #         )
-            
-    #         # Add the curve fit data
-    #         fig.add_scatter(
-    #             x=curve_fit_df["Price"],
-    #             y=curve_fit_df["Quantity Sold"],
-    #             mode="lines",
-    #             name="Richards Curve Fit",
-    #             line=dict(color="red"),
-    #         )
-
-    #         fig.show()
-    #         self.logger.info("The demand curve for one product is calculated successfully.")
-    #     except Exception as e:
-    #         self.logger.info("Error calculating the demand curve for one product: %s", str(e))
-    #         raise e
-
     @log_decorator
     def calculate_demand_curve_product(self, product):
         """
-        Calculates the demand curve for a single product using log-log regression and plots it.
-        Model: log(Q) = a + b*log(P)  =>  Q_hat = exp(a) * P^b
+        This method calculates the demand curve for a single product and plots it using Plotly Express.
+
+        Parameters:
+        - product (str): The product code for which the demand curve is to be calculated.
+
+        Steps:
+        1. Extract data for the specified product.
+        2. Perform curve fitting using the Richards growth function.
+        3. Plot the original sales data and the fitted demand curve using Plotly Express.
         """
         try:
-            self.logger.info("Calculating demand curve for one product (log-log regression)...")
-    
-            product_df = self.estimations[self.estimations["product_code"] == product].reset_index(drop=True)
-    
-            price = product_df[f"product_selling_price_calc"].astype(float)
-            quantity_sold = product_df["predict_sales"].astype(float)
-    
-            # Keep only valid rows for log transforms
-            mask = (price > 0) & (quantity_sold > 0)
-            price_fit = price[mask]
-            qty_fit = quantity_sold[mask]
-    
-            if len(price_fit) < 2:
-                self.logger.info(f"Not enough valid points to fit log-log curve for product {product}.")
-                return
-    
-            # Fit: log(Q) = a + b*log(P)
-            x = np.log(price_fit.values)
-            y = np.log(qty_fit.values)
-            b, a = np.polyfit(x, y, 1)  # slope=b, intercept=a
-    
-            # Predict curve for all prices (only where price > 0)
-            curve_fit_data = np.full(shape=len(price), fill_value=np.nan, dtype=float)
-            mask_price_pos = price.values > 0
-            curve_fit_data[mask_price_pos] = np.exp(a + b * np.log(price.values[mask_price_pos]))
-    
-            curve_fit_df = {"Price": price, "Quantity Sold": curve_fit_data}
-    
+            self.logger.info("Calculating demand curve for one product...")
+            
+            product = self.estimations[self.estimations["product_code"] == product].reset_index(drop=True)
+            
+            price = product[f"product_selling_price_calc"]
+            quantity_sold = product.predict_sales
+            initial_guess = [np.max(quantity_sold), 1, np.min(price), 0.5]
+
+            # Curve fitting
+            params, _ = curve_fit(
+                Price_Elasticity.richards_growth,
+                price,
+                quantity_sold,
+                p0=initial_guess,
+                maxfev=100000,
+            )
+
+            # Calculate the curve fit using the estimated parameters
+            curve_fit_data = Price_Elasticity.richards_growth(price, *params)
+
+            if (curve_fit_data.var() >= 0) & (curve_fit_data.var() < 1):
+                # Curve fitting
+                params, _ = curve_fit(
+                    Price_Elasticity.richards_growth, price, quantity_sold, maxfev=100000
+                )
+
+                # Calculate the curve fit using the estimated parameters
+                curve_fit_data = Price_Elasticity.richards_growth(price, *params)
+                
+            curve_fit_df = {'Price': price, 'Quantity Sold': curve_fit_data}
+
             # Plot the original data
             fig = px.scatter(
-                product_df,
+                product,
                 x=self.price_column + "_calc",
                 y="predict_sales",
-                labels={"predict_sales": "Quantity Sold"},
-                title=f"Original Data vs Log-Log Curve Fit ({product})",
+                labels={"Quantity Sold": "Quantity Sold"},
+                title="Original Data vs Curve Fit",
             )
-    
-            # Add the fitted curve
+            
+            # Add the curve fit data
             fig.add_scatter(
                 x=curve_fit_df["Price"],
                 y=curve_fit_df["Quantity Sold"],
                 mode="lines",
-                name="Log-Log Curve Fit",
+                name="Richards Curve Fit",
                 line=dict(color="red"),
             )
-    
+
             fig.show()
-            self.logger.info("The demand curve for one product is calculated successfully (log-log).")
-    
+            self.logger.info("The demand curve for one product is calculated successfully.")
         except Exception as e:
             self.logger.info("Error calculating the demand curve for one product: %s", str(e))
             raise e
+
+    # @log_decorator
+    # def calculate_demand_curve_product(self, product):
+    #     """
+    #     Calculates the demand curve for a single product using log-log regression and plots it.
+    #     Model: log(Q) = a + b*log(P)  =>  Q_hat = exp(a) * P^b
+    #     """
+    #     try:
+    #         self.logger.info("Calculating demand curve for one product (log-log regression)...")
+    
+    #         product_df = self.estimations[self.estimations["product_code"] == product].reset_index(drop=True)
+    
+    #         price = product_df[f"product_selling_price_calc"].astype(float)
+    #         quantity_sold = product_df["predict_sales"].astype(float)
+    
+    #         # Keep only valid rows for log transforms
+    #         mask = (price > 0) & (quantity_sold > 0)
+    #         price_fit = price[mask]
+    #         qty_fit = quantity_sold[mask]
+    
+    #         if len(price_fit) < 2:
+    #             self.logger.info(f"Not enough valid points to fit log-log curve for product {product}.")
+    #             return
+    
+    #         # Fit: log(Q) = a + b*log(P)
+    #         x = np.log(price_fit.values)
+    #         y = np.log(qty_fit.values)
+    #         b, a = np.polyfit(x, y, 1)  # slope=b, intercept=a
+    
+    #         # Predict curve for all prices (only where price > 0)
+    #         curve_fit_data = np.full(shape=len(price), fill_value=np.nan, dtype=float)
+    #         mask_price_pos = price.values > 0
+    #         curve_fit_data[mask_price_pos] = np.exp(a + b * np.log(price.values[mask_price_pos]))
+    
+    #         curve_fit_df = {"Price": price, "Quantity Sold": curve_fit_data}
+    
+    #         # Plot the original data
+    #         fig = px.scatter(
+    #             product_df,
+    #             x=self.price_column + "_calc",
+    #             y="predict_sales",
+    #             labels={"predict_sales": "Quantity Sold"},
+    #             title=f"Original Data vs Log-Log Curve Fit ({product})",
+    #         )
+    
+    #         # Add the fitted curve
+    #         fig.add_scatter(
+    #             x=curve_fit_df["Price"],
+    #             y=curve_fit_df["Quantity Sold"],
+    #             mode="lines",
+    #             name="Log-Log Curve Fit",
+    #             line=dict(color="red"),
+    #         )
+    
+    #         fig.show()
+    #         self.logger.info("The demand curve for one product is calculated successfully (log-log).")
+    
+    #     except Exception as e:
+    #         self.logger.info("Error calculating the demand curve for one product: %s", str(e))
+    #         raise e
  
     @log_decorator
     def calculate_elasticities(self):

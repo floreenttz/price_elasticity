@@ -160,24 +160,23 @@ class ElasticityCalculator:
         price_col = f"{self.price_column}_calc"
 
         results = []
-        grouped = self.estimations.groupby(["product_code", "sequence_number"])
+        grouped = self.estimations.groupby(["product_code"])
 
-        for (product_code, seq_num), group in grouped:
+        for product_code, group in grouped:
             curve_result = self._fit_demand_curve(group, price_col)
             if curve_result is not None:
                 curve_result["product_code_elasticity"] = product_code
-                curve_result["sequence_number"] = seq_num
                 results.append(curve_result)
 
         if results:
             self.curve_results = pd.concat(results, ignore_index=True)
             self.curve_results = self.curve_results.sort_values(
-                ["product_code_elasticity", "sequence_number", "price"]
+                ["product_code_elasticity", "price"]
             ).reset_index(drop=True)
         else:
             self.curve_results = pd.DataFrame()
 
-        self.logger.info(f"Fitted demand curves for {len(results)} product-sequences")
+        self.logger.info(f"Fitted demand curves for {len(results)} products")
 
     @staticmethod
     def _fit_demand_curve(
@@ -244,11 +243,9 @@ class ElasticityCalculator:
 
         elasticities = {}
 
-        grouped = self.curve_results.groupby(
-            ["product_code_elasticity", "sequence_number"]
-        )
+        grouped = self.curve_results.groupby(["product_code_elasticity"])
 
-        for (product_code, seq_num), group in grouped:
+        for product_code, group in grouped:
             if len(group) < 3:
                 continue
 
@@ -272,14 +269,14 @@ class ElasticityCalculator:
 
             if len(pct_change_q) > 0 and len(pct_change_p) > 0:
                 elasticity = (pct_change_q.iloc[0] / pct_change_p.iloc[0])
-                elasticities[(product_code, seq_num)] = elasticity
+                elasticities[product_code] = elasticity
 
         # Build elasticity DataFrame
         if elasticities:
             self.elasticity_df = pd.DataFrame(
                 [
-                    {"product_code": pc, "sequence_number": seq, "elasticity": e}
-                    for (pc, seq), e in elasticities.items()
+                    {"product_code": pc, "elasticity": e}
+                    for pc, e in elasticities.items()
                 ]
             )
 

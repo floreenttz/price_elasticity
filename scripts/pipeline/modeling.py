@@ -242,6 +242,15 @@ class DemandModel:
                     expanded_row = row_dict.copy()
                     expanded_row[self.price_column] = price
                     expanded_row["sequence_number"] = i
+                        
+                    # Sequential fix: lags within simulation window use simulated price
+                    for column in self.price_change_columns:
+                        for lag in self.price_lags:
+                            if lag <= i:
+                                lag_col = f"{column}_lag_{lag}"
+                                if lag_col in expanded_row:
+                                    expanded_row[lag_col] = price
+                    
                     expanded_rows.append(expanded_row)
 
         if not expanded_rows:
@@ -367,6 +376,14 @@ class DemandModel:
             f"{self.price_column}_calc": self.predict_df[self.price_column],
             "sequence_number": self.predict_df["sequence_number"],
         })
+
+        # Sum predicted quantities across all days per (product, simulated price)
+        self.predictions_df = (
+            self.predictions_df
+            .groupby(["product_code", f"{self.price_column}_calc"])["predicted_quantity"]
+            .sum()
+            .reset_index()
+        )
 
         # Get actual prices for comparison
         last_days = (

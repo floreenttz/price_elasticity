@@ -48,7 +48,7 @@ CONFIG_PATH = "config_files/config_hoogvliet.yaml"
 # PIPELINE
 # =============================================================================
 
-def run_hoogvliet_pipeline(subset: bool = False, config_path: str = CONFIG_PATH):
+def run_hoogvliet_pipeline(subset: bool = False, config_path: str = CONFIG_PATH, save_intermediates: bool = True):
     """
     Run the full pipeline for Hoogvliet.
 
@@ -84,7 +84,8 @@ def run_hoogvliet_pipeline(subset: bool = False, config_path: str = CONFIG_PATH)
         frequency="daily",
     )
     data = preprocessor.run(subset=subset, overview=True)
-    preprocessor.save()
+    if save_intermediates:
+        preprocessor.save()
 
     logger.info(f"Preprocessed: {len(data):,} rows, {data['product_code'].nunique():,} products")
 
