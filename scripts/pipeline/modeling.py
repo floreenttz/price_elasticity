@@ -379,7 +379,7 @@ class DemandModel:
         # Sum predicted quantities across all days per (product, simulated price)
         self.predictions_df = (
             self.predictions_df
-            .groupby(["product_code", f"{self.price_column}_calc"])["predicted_quantity"]
+            .groupby(["product_code", f"{self.price_column}_calc"], observed=True)["predicted_quantity"]
             .sum()
             .reset_index()
         )
@@ -387,7 +387,7 @@ class DemandModel:
         # Get last actual price per product (one row per product)
         last_price = (
             self.data.sort_values(["product_code", "date"])
-            .groupby("product_code")[self.price_column]
+            .groupby("product_code", observed=True)[self.price_column]
             .last()
             .reset_index()
         )
