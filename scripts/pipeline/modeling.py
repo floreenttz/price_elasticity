@@ -7,7 +7,6 @@ This module provides client-agnostic demand modeling using XGBoost.
 import logging
 import os
 from datetime import datetime
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -175,7 +174,7 @@ class DemandModel:
         self.logger.info("Preparing features...")
 
         # All columns except target and date are features (keep product_code like original)
-        exclude = [self.target, "date"]
+        exclude = [self.target, "date", "revenue_before", "revenue_after", "product_buying_price"]
         self.features = [c for c in self.data.columns if c not in exclude]
 
         # Convert object columns to category
@@ -192,10 +191,20 @@ class DemandModel:
         """Split data into training and test sets."""
         self.logger.info("Splitting train/test data...")
 
-        # Calculate cutoff: last N days per product
-        last_dates = self.data.groupby("product_code", observed=True)["date"].transform("max")
-        cutoff_dates = last_dates - pd.Timedelta(days=self.price_grid_freq - 1)
-        is_test = self.data["date"] >= cutoff_dates
+        # Calculate cutoff
+        test_end_date = self.config.get("test_end_date")
+        updated = self.config.get("updated", False)
+        
+        if test_end_date and not updated:
+            test_end = pd.Timestamp(test_end_date)
+            test_start = test_end - pd.Timedelta(days=self.price_grid_freq - 1)
+            is_test = (self.data["date"] >= test_start) & (self.data["date"] <= test_end)
+            self.logger.info(f"Using fixed test window: {test_start.date()} to {test_end.date()}")
+        else:
+            # Last N days per product
+            last_dates = self.data.groupby("product_code", observed=True)["date"].transform("max")
+            cutoff_dates = last_dates - pd.Timedelta(days=self.price_grid_freq - 1)
+            is_test = self.data["date"] >= cutoff_dates
 
         # Training data
         train_mask = ~is_test
@@ -333,6 +342,7 @@ class DemandModel:
             "max_leaves": 782,
             "enable_categorical": True,
             "seed": 42,
+            "n_jobs": -1,
         }
 
         # Merge with provided params
@@ -399,5 +409,11 @@ class DemandModel:
             how="left",
             suffixes=["_calc", "_real"],
         )
+
+        # Round numeric columns
+        round_cols  =[f"{self.price_column}_calc", "predicted_quantity", self.price_column]
+        for col in round_cols:
+            if col in self.predictions_df.columns:
+                self.predictions_df[col] = self.predictions_df[col].round(2)
 
         self.logger.info(f"Generated {len(self.predictions_df):,} predictions")

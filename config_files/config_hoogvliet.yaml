@@ -8,11 +8,11 @@ category: 'category_name_level3'
     
 # Data preprocessing
 filters:
-    filter_product_status: False
-    filter_live_products: False
-    filter_sufficient_price_levels: False
-    filter_low_selling_products: False
-    min_sales: 1
+    filter_product_status: True
+    filter_live_products: True
+    filter_sufficient_price_levels: True
+    filter_low_selling_products: True
+    min_sales: 3
     cpi: True
     
 # Feature Engineering
@@ -22,6 +22,8 @@ price_lags: [1, 2, 3, 4, 5, 6, 7, 14, 21, 28] #, 90, 180, 365
 price_change_columns: ['product_selling_price'] #'adjusted_price_category', 'product_selling_price', 
 min_grid_perc: -10
 max_grid_perc: 10
+test_end_date: '2025-10-26'
+updated: True
 # Modeling
 test_size: 50000
 n_splits: 3

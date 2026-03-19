@@ -142,6 +142,10 @@ class DataPreprocessor:
 
         self._create_price_grid()
 
+        # Round all float columns to 2 decimal places
+        float_cols = self.data.select_dtypes(include=["float"]).columns
+        self.data[float_cols] = self.data[float_cols].round(2)
+
         self.logger.info("Preprocessing complete!")
         return self.data
 
@@ -385,7 +389,13 @@ class DataPreprocessor:
         # Merge CPI into data
         self.data = self.data.merge(cpi_daily, on='date', how='left')
         self.logger.info("CPI merged into data")
-        
+
+        # Create CPI-adjusted price using base year CPI (average CPI of base year)
+        base_year = self.config.get("cpi_base_year", 2023)
+        base_year_mask = cpi_daily['date'].dt.year == base_year
+        base_cpi = cpi_daily.loc[base_year_mask, 'cpi'].mean()
+        self.data['adjusted_price'] = self.data[self.price_column] * (base_cpi / self.data['cpi'])
+        self.logger.info(f"Created adjusted_price using base year {base_year} (base CPI: {base_cpi:.2f})")
 
     # -------------------------------------------------------------------------
     # Column Management
@@ -456,12 +466,26 @@ class DataPreprocessor:
         """Create price grid for elasticity simulation."""
         self.logger.info("Creating price grid...")
 
-        # Get last N days of data per product
-        last_n = (
-            self.data.sort_values(["product_code", "date"])
-            .groupby("product_code")
-            .tail(self.price_grid_freq)
-        )
+        # Get reference rows for price grid
+        # If updated=False and test_end_date is set, use the test week rows
+        # If updated=True, use the last N rows (latest available data)
+        test_end_date = self.config.get("test_end_date")
+        updated = self.config.get("updated", False)
+
+        if test_end_date and not updated:
+            test_end = pd.Timestamp(test_end_date)
+            test_start = test_end - pd.Timedelta(days=self.price_grid_freq - 1)
+            last_n = self.data[
+                (self.data["date"] >= test_start) & (self.data["date"] <= test_end)
+            ]
+            self.logger.info(f"Building price grid from test week: {test_start.date()} to {test_end.date()}")
+        else:
+            last_n = (
+                self.data.sort_values(["product_code", "date"])
+                .groupby("product_code")
+                .tail(self.price_grid_freq)
+            )
+
 
         # Calculate number of price points
         num_prices = abs(self.min_grid_perc) + abs(self.max_grid_perc) + 1
