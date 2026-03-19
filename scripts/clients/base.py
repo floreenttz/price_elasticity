@@ -20,6 +20,11 @@ class ClientAdapter(Protocol):
         ...
 
     @property
+    def country(self) -> str:
+        """ISO 3166-1 alpha-2 country code (e.g., 'NL', 'BE')."""
+        ...
+
+    @property
     def competitors(self) -> list[str]:
         """List of competitor identifiers for price distance features."""
         ...

@@ -25,6 +25,8 @@ price_change_columns: ['product_selling_price'] #'adjusted_price_category', 'pro
 min_grid_perc: -10
 max_grid_perc: 10
 # Modeling
+test_end_date: '2025-10-26'
+updated: True
 test_size: 5000
 n_splits: 3
 optuna: False

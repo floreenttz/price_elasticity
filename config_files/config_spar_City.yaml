@@ -26,6 +26,8 @@ min_grid_perc: -10
 max_grid_perc: 10
 
 # Modeling
+test_end_date: '2025-10-26'
+updated: True
 test_size: 50000
 n_splits: 3
 optuna: False

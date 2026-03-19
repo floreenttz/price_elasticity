@@ -160,7 +160,7 @@ class ElasticityCalculator:
         price_col = f"{self.price_column}_calc"
 
         results = []
-        grouped = self.estimations.groupby(["product_code"])
+        grouped = self.estimations.groupby("product_code")
 
         for product_code, group in grouped:
             curve_result = self._fit_demand_curve(group, price_col)
@@ -243,7 +243,7 @@ class ElasticityCalculator:
 
         elasticities = {}
 
-        grouped = self.curve_results.groupby(["product_code_elasticity"])
+        grouped = self.curve_results.groupby("product_code_elasticity")
 
         for product_code, group in grouped:
             if len(group) < 3:

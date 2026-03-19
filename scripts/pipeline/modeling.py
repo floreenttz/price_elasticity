@@ -194,7 +194,8 @@ class DemandModel:
         # Calculate cutoff
         test_end_date = self.config.get("test_end_date")
         updated = self.config.get("updated", False)
-        
+
+
         if test_end_date and not updated:
             test_end = pd.Timestamp(test_end_date)
             test_start = test_end - pd.Timedelta(days=self.price_grid_freq - 1)
@@ -411,7 +412,7 @@ class DemandModel:
         )
 
         # Round numeric columns
-        round_cols  =[f"{self.price_column}_calc", "predicted_quantity", self.price_column]
+        round_cols = [f"{self.price_column}_calc", "predicted_quantity", self.price_column]
         for col in round_cols:
             if col in self.predictions_df.columns:
                 self.predictions_df[col] = self.predictions_df[col].round(2)

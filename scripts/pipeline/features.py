@@ -4,10 +4,14 @@ Refactored FeatureEngineer using client adapters.
 This module provides client-agnostic feature engineering for demand modeling.
 """
 
+import calendar
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
+import datetime as dt
 
+import holidays
+from holidays.countries import Netherlands
 import numpy as np
 import pandas as pd
 
@@ -33,6 +37,25 @@ def get_logger(name: str = "features") -> logging.Logger:
         logger.propagate = False
 
     return logger
+
+
+class ExtendedNLHolidays(Netherlands):
+    """Dutch holidays extended with commercially relevant dates missing from the default module."""
+
+    def _populate(self, year):
+        Netherlands._populate(self, year)
+        # Default module only counts Bevrijdingsdag every 5 years; include it annually
+        try:
+            self.pop_named("Bevrijdingsdag")
+        except KeyError:
+            pass
+        self[dt.date(year, 5, 5)] = "Bevrijdingsdag"
+        self[dt.date(year, 12, 5)] = "Sinterklaas"
+        self[dt.date(year, 12, 24)] = "Kerstavond"
+
+        c = calendar.Calendar(firstweekday=calendar.MONDAY)
+        self[c.monthdatescalendar(year, 6)[2][-1]] = "Vaderdag"   # 3rd Sunday of June
+        self[c.monthdatescalendar(year, 5)[1][-1]] = "Moederdag"  # 2nd Sunday of May
 
 
 class FeatureEngineer:
@@ -98,10 +121,15 @@ class FeatureEngineer:
         # Feature engineering steps
         self._calendar_features()
         self._weather_features()
+        self._holiday_features()
         self._lag_features()
         self._price_change_features()
         self._price_distance_features()
         self._convert_dtypes()
+
+        # Round all float columns to 2 decimal places
+        float_cols = self.data.select_dtypes(include=["float"]).columns
+        self.data[float_cols] = self.data[float_cols].round(2)
 
         self.logger.info("Feature engineering complete!")
         return self.data
@@ -145,6 +173,45 @@ class FeatureEngineer:
         self.logger.info("Calendar features created")
 
     # -------------------------------------------------------------------------
+    # Holiday Features
+    # -------------------------------------------------------------------------
+
+    def _holiday_features(self) -> None:
+        """Create holiday proximity features."""
+        self.logger.info("Adding holiday features...")
+
+        start_year = self.data["date"].min().year
+        years = range(start_year, datetime.now().year + 1)
+
+        if self.client.country == "NL":
+            client_holidays = ExtendedNLHolidays(years=years)
+        else:
+            client_holidays = holidays.country_holidays(self.client.country, years=years)
+
+        holiday_df = pd.DataFrame(list(client_holidays.items()), columns=["date", "holiday"])
+        holiday_df["date"] = pd.to_datetime(holiday_df["date"])
+
+        # Build a full date range and merge holidays in
+        start_date = datetime(start_year, 1, 1)
+        end_date = datetime.now() + timedelta(days=365)
+        date_range = pd.date_range(start=start_date, end=end_date, freq="D")
+        df = pd.DataFrame({"date": date_range})
+
+        holiday_df = pd.merge(df, holiday_df, on="date", how="outer")
+        holiday_df["holiday"] = holiday_df["holiday"].fillna("No holiday")
+
+        # Days until next holiday
+        group = holiday_df["holiday"].iloc[::-1].ne("No holiday").cumsum()
+        holiday_df["time_untilnextholiday"] = group.groupby(group).cumcount()
+
+        # Days since previous holiday
+        group = holiday_df["holiday"].ne("No holiday").cumsum()
+        holiday_df["time_afterpreviousholiday"] = group.groupby(group).cumcount()
+
+        self.data = self.data.merge(holiday_df, on="date", how="left")
+        self.logger.info("Holiday features added")
+
+    # -------------------------------------------------------------------------
     # Weather Features
     # -------------------------------------------------------------------------
 
@@ -177,6 +244,7 @@ class FeatureEngineer:
         else:
             self.logger.info("Weather data not available")
 
+ 
     # -------------------------------------------------------------------------
     # Lag Features
     # -------------------------------------------------------------------------

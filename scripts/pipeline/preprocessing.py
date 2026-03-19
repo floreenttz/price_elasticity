@@ -112,6 +112,7 @@ class DataPreprocessor:
         self._filter_columns()
         self._convert_columns()
         self._deduplicate_columns()
+        self._aggregate_to_product_day()
 
         if self.filters.get("filter_product_status", False):
             self._filter_product_status()
@@ -485,7 +486,6 @@ class DataPreprocessor:
                 .groupby("product_code")
                 .tail(self.price_grid_freq)
             )
-
 
         # Calculate number of price points
         num_prices = abs(self.min_grid_perc) + abs(self.max_grid_perc) + 1

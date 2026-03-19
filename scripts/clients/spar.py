@@ -62,6 +62,10 @@ class SparAdapter:
         return "spar"
 
     @property
+    def country(self) -> str:
+        return "NL"
+
+    @property
     def competitors(self) -> list[str]:
         return ["ah", "plus"]
 

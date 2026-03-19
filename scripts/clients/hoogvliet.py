@@ -28,6 +28,10 @@ class HoogvlietAdapter:
         return "hoogvliet"
 
     @property
+    def country(self) -> str:
+        return "NL"
+
+    @property
     def competitors(self) -> list[str]:
         return ["ah", "lidl", "dirck_iii", "vomar", "gall_gall", "jumbo", "dirk"]
 

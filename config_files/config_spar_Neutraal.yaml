@@ -24,6 +24,8 @@ price_lags: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 
 price_change_columns: ['product_selling_price'] #'adjusted_price_category', 'product_selling_price', 
 min_grid_perc: -10
 max_grid_perc: 10
+test_end_date: '2025-10-26'
+updated: True
 test_size: 50000
 n_splits: 3
 optuna: False
