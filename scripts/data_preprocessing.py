@@ -155,42 +155,6 @@ class DataPreprocessor:
             self.logger.error("Error loading configuration: %s", str(e))
             raise e
 
-    # @log_decorator
-    # def _load_sales_data(self, subset):
-    #     """
-    #     This function attempts to load sales data from the specified CSV file, automatically detecting
-    #     the appropriate separator. It gogs success or failure messages and update progress accordingly.
-
-    #     Returns:
-    #         pandas.DataFrame: The loaded sales data as a DataFrame.
-
-    #     Raises:
-    #         Exception: If there is an error while loading the sales data.
-    #     """
-
-    #     try:
-    #         self.logger.info("Loading sales data...")
-    #         if self.client_name == 'spar':
-    #             self.data_dir = os.path.join(self.raw_data_s3_prefix, self.priceline_name + '_aggregated.parquet')
-    #         else:
-    #             self.data_dir = os.path.join(self.raw_data_s3_prefix, 'raw_data.parquet')
-
-    #         if 'parquet' in self.data_dir:
-    #             self.data = pd.read_parquet(self.data_dir)
-    #             self.test = self.data.copy()
-    #         else:
-    #             raise f"Unsupported file format: {self.data_dir}"
-        
-    #         # Take a subset of data by selecting the 3 biggest categories
-    #         if subset:
-    #             cats = self.data['product_category_code_level2'].value_counts().nlargest(3).index
-    #             self.data = self.data[self.data['product_category_code_level2'].isin(cats)]
-                        
-    #         self.logger.info("Sales data loaded successfully.")
-    #     except Exception as e:
-    #         self.logger.error("Error loading sales data: %s", str(e))
-    #         raise e
-
     @log_decorator
     def _load_other_data(self):
         """

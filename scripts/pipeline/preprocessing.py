@@ -282,6 +282,7 @@ class DataPreprocessor:
         after = self.data["product_code"].nunique()
         self.logger.info(f"Filtered {before - after} products with insufficient price levels")
 
+
     def _filter_low_selling_products(self) -> None:
         """Filter products with low median sales."""
         self.logger.info("Filtering low selling products...")

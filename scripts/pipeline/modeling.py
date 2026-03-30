@@ -12,6 +12,8 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 import joblib
+import shap
+from sklearn.metrics import r2_score
 
 from ..clients.base import ClientAdapter
 from ..storage.base import Storage
@@ -123,6 +125,9 @@ class DemandModel:
         # Train model
         self._train_model()
 
+        # Check for data leakage
+        self._check_leakage()
+
         # Generate predictions
         self._generate_predictions()
 
@@ -174,7 +179,7 @@ class DemandModel:
         self.logger.info("Preparing features...")
 
         # All columns except target and date are features (keep product_code like original)
-        exclude = [self.target, "date", "revenue_before", "revenue_after", "product_buying_price"]
+        exclude = [self.target, "date", "revenue_before", "revenue_after", "product_buying_price", "cpi", "jumbo_price", "dirk_price", "dirck_iii_price", "vomar_price", "lidl_price", "ah_price", "gall_gall_price", "valid_from", "valid_to", "product_id", "yearweek"]
         self.features = [c for c in self.data.columns if c not in exclude]
 
         # Convert object columns to category
@@ -213,6 +218,7 @@ class DemandModel:
 
         # Test data for predictions
         test_data = self.data.loc[is_test].copy()
+        self.holdout_data = test_data.copy() # save actual prices for leakage check
 
         # Expand test data with price grid
         self.predict_df = self._expand_with_price_grid(test_data)
@@ -304,7 +310,7 @@ class DemandModel:
         # Drop lag columns from predict_df (matches original)
         df.drop(columns=[c for c in lag_cols_to_drop if c in df.columns], inplace=True)
 
-        # Also drop lag columns from x_train (matches original)
+        # Drop lag columns from x_train (matches original)
         for col in lag_cols_to_drop:
             if col in self.x_train.columns:
                 self.x_train.drop(columns=[col], inplace=True)
@@ -358,6 +364,55 @@ class DemandModel:
 
         self.logger.info("Model trained successfully")
 
+    def _check_leakage(self) -> None:
+        """Compute holdout R^2 at actual prices and warn if suspiciously high."""
+        self.logger.info("Checking for data leakage...")
+
+        warn_threshold = self.config.get("leakage_warn_r2", 0.82)
+        alert_threshold = self.config.get("leakage_alert_r2", 0.87)
+
+        try:
+            x_holdout = self.holdout_data[self.x_train.columns]
+            y_holdout = self.holdout_data[self.target]
+
+            y_pred = np.expm1(self.model.predict(x_holdout))
+            holdout_r2 = float(r2_score(y_holdout, y_pred))
+
+            self.logger.info(f"Holdout R^2 at actual prices: {holdout_r2:.4f}")
+            self.logger.info("No leakage detected")
+
+            if holdout_r2 <= warn_threshold:
+                self.loggerinfo(f"Holdout R^2={holdout_r2:.4f} is below warning threshold ({warn_threshold}). No leakage detection")
+            elif holdout_r2 > warn_threshold:
+                top5 = {}
+                try:
+                    explainer = shap.TreeExplainer(self.model)
+                    sample = x_holdout.sample(2000, random_state=42)
+                    shap_values = explainer.shap_values(sample)
+                    top5 = pd.Series(
+                        np.abs(shap_values).mean(axis=0), index=self.x_train.columns
+                    ).nlargest(5).to_dict()
+                except Exception as shap_err:
+                    self.logger.warning(f"SHAP computation failed: {shap_err}")
+
+                if holdout_r2 > alert_threshold:
+                    self.logger.error(
+                        f"LEAKAGE ALERT: Holdout R^2={holdout_r2:.4f} exceeds alert threshold ({alert_threshold})."
+                        f"Strongly recommend investigating before using results."
+                        f"Top 5 features by SHAP: {top5}"
+                        f"Common leakage sources: revenue, margin, or buying price features."
+                    )
+                else:
+                    self.logger.warning(
+                        f"LEAKAGE WARNING: Holdout R^2={holdout_r2:.4f} exceeds warning threshold ({warn_threshold})."
+                        f"Inspect feature importance for potential leakage."
+                        f"Top 5 features by SHAP: {top5}"
+                        f"Common leakage sources: revenue, margin, or buying price features."
+                    )
+
+        except Exception as e:
+            self.logger.warning(f"Leakage check failed: {e}")
+
     # -------------------------------------------------------------------------
     # Predictions
     # -------------------------------------------------------------------------
@@ -384,7 +439,11 @@ class DemandModel:
             "product_code": self.predict_df["product_code"],
             "predicted_quantity": y_pred,
             f"{self.price_column}_calc": self.predict_df[self.price_column],
+            "date": self.predict_df["date"]
         })
+
+        # Save per-day predictions before summing (needed for day_std in elasticity)
+        self.predictions_per_day = self.predictions_df.copy()
 
         # Sum predicted quantities across all days per (product, simulated price)
         self.predictions_df = (

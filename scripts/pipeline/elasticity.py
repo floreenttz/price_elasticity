@@ -11,6 +11,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import r2_score
 
 from ..clients.base import ClientAdapter
 from ..storage.base import Storage
@@ -83,6 +84,7 @@ class ElasticityCalculator:
         self,
         estimations: pd.DataFrame | None = None,
         preprocessed_data: pd.DataFrame | None = None,
+        predictions_per_day: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
         """
         Execute the elasticity calculation pipeline.
@@ -90,6 +92,7 @@ class ElasticityCalculator:
         Args:
             estimations: Predictions DataFrame. If None, loads from storage.
             preprocessed_data: Preprocessed data for category info. If None, loads.
+            predictions_per_day: Per-day predictions for day_std calculation.
 
         Returns:
             DataFrame with elasticity values.
@@ -116,7 +119,26 @@ class ElasticityCalculator:
         # Calculate demand curves and elasticities
         self._calculate_demand_curves()
         self._calculate_elasticities()
+
+        # Compute quality scores
+        day_std_scores = self._calculate_day_std(predictions_per_day) if predictions_per_day is not None else {}
+        self._assign_quality_tiers(day_std_scores)
+
+        # Apply min_quality_tier filter
+        min_quality_tier = self.config.get("min_quality_tier", None)
+        tier_order = {"high": 2, "medium": 1, "low": 0}
+        
+        # Log unfiltered stats before applying quality filter
+        tier_counts = self.elasticity_df["quality_tier"].value_counts().to_dict()
+        self.logger.info(f"Unfiltered elasticities:{len(self.elasticity_df)} products, tiers: {tier_counts}")
+
+        if min_quality_tier in tier_order:
+            min_rank = tier_order[min_quality_tier]
+            self.elasticity_df = self.elasticity_df[
+                self.elasticity_df["quality_tier"].map(tier_order) >= min_rank]
+            self.logger.info(f"After filtering (min_quality_tier={min_quality_tier}): {len(self.elasticity_df)} products remaining")
         self._calculate_elasticities_per_category()
+        
 
         # Add client metadata
         self.elasticity_df = self.client.add_output_metadata(self.elasticity_df)
@@ -160,13 +182,16 @@ class ElasticityCalculator:
         price_col = f"{self.price_column}_calc"
 
         results = []
-        grouped = self.estimations.groupby(["product_code"])
+        self.r2_scores: dict[str, float] = {}
+        grouped = self.estimations.groupby("product_code")
 
         for product_code, group in grouped:
             curve_result = self._fit_demand_curve(group, price_col)
             if curve_result is not None:
-                curve_result["product_code_elasticity"] = product_code
-                results.append(curve_result)
+                result_df, r2 = curve_result
+                result_df["product_code_elasticity"] = product_code
+                results.append(result_df)
+                self.r2_scores[product_code] = r2
 
         if results:
             self.curve_results = pd.concat(results, ignore_index=True)
@@ -181,53 +206,57 @@ class ElasticityCalculator:
     @staticmethod
     def _fit_demand_curve(
         group: pd.DataFrame, price_col: str
-    ) -> pd.DataFrame | None:
+        ) -> tuple[pd.DataFrame, float] | None:
         """
         Fit a log-log demand curve: log(Q) = a + b*log(P)
 
         Args:
-            group: DataFrame with price and quantity data.
-            price_col: Name of the price column.
+          group: DataFrame with price and quantity data.
+          price_col: Name of the price column.
 
         Returns:
-            DataFrame with fitted curve, or None if fitting failed.
+          Tuple of (DataFrame with fitted curve, R²), or None if fitting failed.
         """
         if group.empty:
-            return None
+          return None
 
         # Filter valid rows (positive price and quantity)
         g = group.copy()
         g = g[(g["predict_sales"] > 0) & (g[price_col] > 0)]
 
         if len(g) < 2:
-            return None
+          return None
 
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
+          warnings.simplefilter("ignore")
 
-            try:
-                x = np.log(g[price_col].astype(float).values)
-                y = np.log(g["predict_sales"].astype(float).values)
+          try:
+              x = np.log(g[price_col].astype(float).values)
+              y = np.log(g["predict_sales"].astype(float).values)
 
-                # Linear regression in log space
-                b, a = np.polyfit(x, y, 1)
+              # Fit log-log curve
+              b, a = np.polyfit(x, y, 1)
 
-                # Predict for original prices
-                prices = group[price_col].astype(float).values
-                fitted = np.full(len(prices), np.nan)
+              # Compute R²
+              y_fit = a + b * x
+              r2 = float(r2_score(y, y_fit))
 
-                mask = prices > 0
-                fitted[mask] = np.exp(a + b * np.log(prices[mask]))
+              # Predict for original prices
+              prices = group[price_col].astype(float).values
+              fitted = np.full(len(prices), np.nan)
 
-                result = pd.DataFrame({
-                    "price": group[price_col].values,
-                    "sales": fitted,
-                })
+              price_mask = prices > 0
+              fitted[price_mask] = np.exp(a + b * np.log(prices[price_mask]))
 
-                return result.dropna(subset=["sales"])
+              result = pd.DataFrame({
+                  "price": group[price_col].values,
+                  "sales": fitted,
+              })
 
-            except Exception:
-                return None
+              return result.dropna(subset=["sales"]), r2
+
+          except Exception:
+              return None
 
     # -------------------------------------------------------------------------
     # Elasticity Calculation
@@ -243,7 +272,7 @@ class ElasticityCalculator:
 
         elasticities = {}
 
-        grouped = self.curve_results.groupby(["product_code_elasticity"])
+        grouped = self.curve_results.groupby("product_code_elasticity")
 
         for product_code, group in grouped:
             if len(group) < 3:
@@ -296,62 +325,155 @@ class ElasticityCalculator:
             f"Calculated elasticities for {len(self.elasticity_df)} products"
         )
 
+    def _calculate_day_std(self, predictions_per_day: pd.DataFrame) -> dict:
+        """Calculate standard deviation of elasticity across simulation days per product."""
+        self.logger.info("Calculating day_std...")
+    
+        price_col = f"{self.price_column}_calc"
+
+        # Filter valid rows and compute log values
+        df = predictions_per_day[
+            (predictions_per_day["predicted_quantity"] > 0) & (predictions_per_day[price_col] > 0)
+        ].copy()
+
+        df["_log_p"] = np.log(df[price_col].astype(float))
+        df["_log_q"] = np.log(df["predicted_quantity"].astype(float))
+        df["_log_p2"] = df["_log_p"] ** 2
+        df["_log_pq"] = df["_log_p"] * df["_log_q"]
+
+        # Compute OLS slope b = (n * sigma(xy) - sigma(x) * sigma(y)) / (n * sigma(x^2) - (sigma(x))^2) per product-date 
+        agg = df.groupby(["product_code", "date"]).agg(
+            n = ("_log_p", "count"),
+            sum_x = ("_log_p", "sum"),
+            sum_y = ("_log_q", "sum"),
+            sum_x2 = ("_log_p2", "sum"),
+            sum_xy = ("_log_pq", "sum"),
+        )
+
+        denominator = agg["n"] * agg["sum_x2"] - agg["sum_x"] ** 2
+        numerator = agg["n"] * agg["sum_xy"] - agg["sum_x"] * agg["sum_y"]
+        slope = numerator / denominator 
+        # Invalidate slopes where fewer than 2 points or no price variance
+        slope = slope.where((agg["n"] >= 2) & (denom != 0)
+        
+        # Compute std of daily slopes per product 
+        slope_df = slope.reset_index(name="slope")
+        valid_per_product = slope_df.groupby("product_code")["slope"].apply(lambda x: x.notna().sum())
+        day_std_series = slope_df.groupby("product_code")["slope"].std(ddof=0)
+        # Products with fewer than 2 valid daily slopes get None
+        day_std_series = day_std_series.where(valid_per_product > 1)
+
+        day_std_scores = {
+            k: (None if pd.isna(v) else float(v))
+            for k, v in day_std_series.to_dict().items()
+        }
+    
+        self.logger.info(f"Calculated day_std for {len(day_std_scores)} products")
+        return day_std_scores
+
+
+    def _assign_quality_tiers(self, day_std_scores: dict) -> None:
+        """Merge r2, day_std, and quality_tier into elasticity_df."""
+        self.logger.info("Assigning quality tiers...")
+    
+        rows = []
+        for product_code in self.elasticity_df["product_code"]:
+            r2 = self.r2_scores.get(product_code, 0.0)
+            day_std = day_std_scores.get(product_code, None)
+    
+            if day_std is None:
+                if r2 >= 0.95:
+                    tier = "high"
+                elif r2 >= 0.80:
+                    tier = "medium"
+                else:
+                    tier = "low"
+            else:
+                if r2 >= 0.95 and day_std <= 0.10:
+                    tier = "high"
+                elif r2 >= 0.80 and day_std <= 0.20:
+                    tier = "medium"
+                else:
+                    tier = "low"
+    
+            rows.append({"product_code": product_code, "r2": r2, "day_std": day_std, "quality_tier": tier})
+    
+        scores_df = pd.DataFrame(rows)
+        self.elasticity_df = self.elasticity_df.merge(scores_df, on="product_code", how="left")
+    
+        tier_counts = self.elasticity_df["quality_tier"].value_counts().to_dict()
+        self.logger.info(f"Quality tiers: {tier_counts}")
+
     # -------------------------------------------------------------------------
     # Category Aggregation
     # -------------------------------------------------------------------------
 
     def _calculate_elasticities_per_category(self) -> None:
-        """Aggregate elasticities by category."""
-        self.logger.info("Calculating elasticities per category...")
-
-        if self.elasticity_df.empty:
-            self.elasticities_by_category = pd.DataFrame()
-            return
-
-        # Keep only non-positive elasticities (economically sensible)
-        valid_elasticities = self.elasticity_df[self.elasticity_df["elasticity"] <= 0]
-
-        # Merge with category info
-        merged = pd.merge(
-            valid_elasticities,
-            self.preprocessed_data[["product_code", self.category_column]].drop_duplicates(),
-            on="product_code",
-            how="left",
-        )
-
-        # Calculate aggregates per category
-        self.elasticities_by_category = (
-            merged.groupby(self.category_column)
-            .agg(
-                elasticity_median=("elasticity", "median"),
-                elasticity_mean=("elasticity", "mean"),
-                num_products=("product_code", "nunique"),
-            )
-            .reset_index()
-        )
-
-        # Round values
-        self.elasticities_by_category["elasticity_median"] = (
-            self.elasticities_by_category["elasticity_median"].round(2)
-        )
-        self.elasticities_by_category["elasticity_mean"] = (
-            self.elasticities_by_category["elasticity_mean"].round(2)
-        )
-
-        # Filter categories with enough products
-        min_products = 5
-        self.elasticities_by_category = self.elasticities_by_category[
-            self.elasticities_by_category["num_products"] >= min_products
-        ]
-
-        # Add client metadata
-        self.elasticities_by_category = self.client.add_output_metadata(
-            self.elasticities_by_category
-        )
-
-        self.logger.info(
-            f"Calculated elasticities for {len(self.elasticities_by_category)} categories"
-        )
+          """Aggregate elasticities by category using revenue-weighted average."""
+        
+          if self.elasticity_df.empty:
+              self.elasticities_by_category = pd.DataFrame()
+              return
+        
+          valid_elasticities = self.elasticity_df.copy()
+        
+          revenue_col = "revenue_before" if "revenue_before" in self.preprocessed_data.columns else "revenue_after"
+        
+          # Compute total revenue per product across all dates
+          product_revenue = (
+              self.preprocessed_data.groupby("product_code")[revenue_col]
+              .sum()
+              .reset_index()
+              .rename(columns={revenue_col: "total_revenue"})
+          )
+        
+          # Merge elasticities with category and revenue
+          merged = pd.merge(
+              valid_elasticities,
+              self.preprocessed_data[["product_code", self.category_column]].drop_duplicates(),
+              on="product_code",
+              how="left",
+          )
+          merged = pd.merge(merged, product_revenue, on="product_code", how="left")
+        
+          # Vectorized weighted average
+          merged["weighted_elasticity"] = merged["elasticity"] * merged["total_revenue"]
+        
+          self.elasticities_by_category = merged.groupby(self.category_column).agg(
+              weighted_elasticity_sum=("weighted_elasticity", "sum"),
+              total_revenue_sum=("total_revenue", "sum"),
+              elasticity_median=("elasticity", "median"),
+              elasticity_mean=("elasticity", "mean"),
+              num_products=("product_code", "nunique"),
+          ).reset_index()
+        
+          self.elasticities_by_category["elasticity_weighted"] = (
+              self.elasticities_by_category["weighted_elasticity_sum"] / self.elasticities_by_category["total_revenue_sum"]
+          )
+          self.elasticities_by_category = self.elasticities_by_category.drop(
+              columns=["weighted_elasticity_sum", "total_revenue_sum"]
+          )
+        
+          # Round values
+          for col in ["elasticity_weighted", "elasticity_median", "elasticity_mean"]:
+              self.elasticities_by_category[col] = self.elasticities_by_category[col].round(2)
+        
+          # Filter categories with enough products
+          min_products = 5
+          self.elasticities_by_category = self.elasticities_by_category[
+              self.elasticities_by_category["num_products"] >= min_products
+              ]
+        
+          self.elasticities_by_category = self.elasticities_by_category.sort_values("elasticity_weighted").reset_index(drop=True)
+        
+          # Add client metadata
+          self.elasticities_by_category = self.client.add_output_metadata(
+              self.elasticities_by_category
+          )
+        
+        # self.logger.info(
+        #     f"Calculated elasticities for {len(self.elasticities_by_category)} categories"
+        # )
 
     # -------------------------------------------------------------------------
     # Reporting

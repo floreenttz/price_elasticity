@@ -28,6 +28,10 @@ class HoogvlietAdapter:
         return "hoogvliet"
 
     @property
+    def country(self) -> str:
+        return "NL"
+
+    @property
     def competitors(self) -> list[str]:
         return ["ah", "lidl", "dirck_iii", "vomar", "gall_gall", "jumbo", "dirk"]
 
@@ -79,7 +83,7 @@ class HoogvlietAdapter:
         if subset:
             import numpy as np
             rng = np.random.default_rng(42)
-            k = max(1, int(len(all_files) * 0.1))
+            k = max(1, int(len(all_files) * 0.50))
             all_files = rng.choice(all_files, size=k, replace=False).tolist()
 
         # Load in chunks to manage memory

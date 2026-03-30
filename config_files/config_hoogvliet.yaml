@@ -12,26 +12,30 @@ filters:
     filter_live_products: True
     filter_sufficient_price_levels: True
     filter_low_selling_products: True
-    min_sales: 3
+    filter_price_range: True
+    min_sales: 10
     cpi: True
     
 # Feature Engineering
 out_of_stock_days: 7
 ignore_out_of_stock_days: 2
 price_lags: [1, 2, 3, 4, 5, 6, 7, 14, 21, 28] #, 90, 180, 365
-price_change_columns: ['product_selling_price'] #'adjusted_price_category', 'product_selling_price', 
+price_change_columns: ['product_selling_price', 'adjusted_price'] #'adjusted_price_category', 'product_selling_price', 
 min_grid_perc: -10
 max_grid_perc: 10
 test_end_date: '2025-10-26'
-updated: True
+updated: False
 # Modeling
 test_size: 50000
 n_splits: 3
 optuna: False
 optuna_trials: 100
+leakage_warn_r2: 0.82
+leakage_alert_r2: 0.87
 
 # Elasticity
 prods_per_category: 1
+min_quality_tier: null # options: 'high', 'medium', null (no filtering)
 
 # S3 data
 s3_dir: 

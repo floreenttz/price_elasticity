@@ -25,6 +25,11 @@ class ClientAdapter(Protocol):
         ...
 
     @property
+    def country(self) -> str:
+        """Country code (e.g., 'NL', 'BE')."""
+        ...
+
+    @property
     def category_column(self) -> str:
         """Column name for product category grouping."""
         ...
