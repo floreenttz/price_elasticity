@@ -170,7 +170,7 @@ class FeatureEngineer:
         self.data["is_month_end"] = self.data["date"].dt.is_month_end
         self.data["is_quarter_start"] = self.data["date"].dt.is_quarter_start
         self.data["is_quarter_end"] = self.data["date"].dt.is_quarter_end
-
+                                                   
         self.logger.info("Calendar features created")
 
     # -------------------------------------------------------------------------
@@ -304,17 +304,67 @@ class FeatureEngineer:
         for competitor in self.competitors:
             comp_col = f"{competitor}_price"
             if comp_col in self.data.columns:
+                # Forward-fill missing competitor prices per product
+                self.data[comp_col] = self.data.groupby("product_code")[comp_col].ffill()
+                
                 dist_col = f"price_distance_{competitor}"
                 own_price = self.data[self.price_column]
                 comp_price = self.data[comp_col]
                 avg_price = (own_price + comp_price) / 2
 
-                # Avoid division by zero
                 self.data[dist_col] = np.where(
                     avg_price > 0,
                     (own_price - comp_price) / avg_price,
-                    0,
+                    np.nan,
                 )
+
+        # Name of the cheapest and most expensive competitor
+        comp_price_cols = [f"{c}_price" for c in self.competitors if f"{c}_price" in self.data.columns]
+        if comp_price_cols:
+            comp_prices = self.data[comp_price_cols]
+            self.data["cheapest_competitor"] = comp_prices.idxmin(axis=1).str.replace("_price", "", regex=False)
+            self.data["most_expensive_competitor"] = comp_prices.idxmax(axis=1).str.replace("_price", "", regex=False)
+                
+        # Aggregate distance features across all competitor
+        dist_cols = [f"price_distance_{c}" for c in self.competitors if f"price_distance_{c}" in self.data.columns]
+
+        if dist_cols:
+            distances = self.data[dist_cols]
+            own_price = self.data[self.price_column]
+
+            if comp_price_cols:
+
+                cheapest_comp = comp_prices.min(axis=1)
+                avg_cheapest = (own_price + cheapest_comp) / 2
+                self.data["price_distance_cheapest"] = np.where(
+                    avg_cheapest > 0,
+                    (own_price - cheapest_comp) / avg_cheapest,
+                    np.nan,
+                )
+
+                most_expensive_comp = comp_prices.max(axis=1)
+                avg_most_expensive = (own_price + most_expensive_comp) / 2
+                self.data["price_distance_most_expensive"] = np.where(
+                    avg_most_expensive > 0,
+                    (own_price - most_expensive_comp) / avg_most_expensive,
+                    np.nan,
+                )
+
+            self.data["price_distance_mean"] = distances.mean(axis=1)
+            self.data["n_competitors_cheaper"] = (distances > 0).sum(axis=1)
+            self.data["n_competitor_available"] = distances.notna().sum(axis=1)
+
+        # Competitor price index (geometric mean of available competitor prices)
+        if comp_price_cols:
+            comp_price_valid = self.data[comp_price_cols].copy().replace(0, np.nan)
+            log_comp_prices = np.log(comp_price_valid)
+            self.data["comp_price_index"] = np.exp(log_comp_prices.mean(axis=1))
+
+            # Log features for statistical elasticity models
+            own_price = self.data[self.price_column]
+            self.data["log_own_price"] = np.where(own_price > 0,  np.log(own_price), np.nan)
+            self.data["log_comp_index"] = np.where(self.data["comp_price_index"] > 0, np.log(self.data["comp_price_index"]), np.nan)
+            self.data["log_relative_price"] = self.data["log_own_price"] - self.data["log_comp_index"]
 
         self.logger.info("Price distance features created")
 

@@ -26,6 +26,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.clients.hoogvliet import HoogvlietAdapter
+from scripts.clients.ijsvogel import IJsvogel
 from scripts.clients.spar import SparAdapter
 from scripts.storage.s3 import S3Storage
 from scripts.storage.local import LocalStorage
@@ -37,8 +38,12 @@ from scripts.pipeline.elasticity import ElasticityCalculator
 # Registry mapping client names to factory functions.
 CLIENT_REGISTRY = {
     "hoogvliet": lambda priceline: HoogvlietAdapter(),
-    "spar": lambda priceline: SparAdapter(priceline=priceline)
+    "spar": lambda priceline: SparAdapter(priceline=priceline),
+    "ijsvogel": lambda priceline: IJsvogel(channel=priceline),
 }
+
+# Clients that require a channel/priceline argument
+CLIENTS_REQUIRING_CHANNEL = {"spar", "ijsvogel"}
 
 def load_config(config_path: str) -> dict:
     """Load configuration from YAML file."""
@@ -50,8 +55,8 @@ def get_client(client_name: str, priceline: str | None = None):
     """Get the appropriate client adapter."""
     if client_name not in CLIENT_REGISTRY: 
         raise ValueError(f"Unknown client: '{client_name}'. Available: {list(CLIENT_REGISTRY)}")
-    if client_name == "spar" and priceline is None: 
-        raise ValueError("Spar requires a priceline (e.g. 'Enjoy', 'City')")
+    if client_name in CLIENTS_REQUIRING_CHANNEL and priceline is None:
+        raise ValueError(f"{client_name} requires a channe;/priceline argument"
     return CLIENT_REGISTRY[client_name](priceline)
 
 

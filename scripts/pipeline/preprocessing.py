@@ -337,7 +337,7 @@ class DataPreprocessor:
         """
         if self.config.get("competitor_info", False):
             self.logger.info("Updating competitor prices...")
-            competitors = self.config.get("competitors", [])
+            competitors = self.config.get("competitors", self.client.competitors)
             for competitor in competitors:
                 try:
                     content_factor_col = f"{competitor}_content_factor"
@@ -498,11 +498,11 @@ class DataPreprocessor:
             for _, row in group.iterrows():
                 base_price = row[self.price_column]
                 if base_price > 0:
-                    prices = np.linspace(
+                    prices = np.round(np.linspace(
                         base_price * (1 + self.min_grid_perc / 100),
                         base_price * (1 + self.max_grid_perc / 100),
                         num_prices,
-                    ).tolist()
+                    ), 2).tolist()
                     product_prices.append(prices)
             if product_prices:
                 self.price_grid[str(product_code)] = product_prices

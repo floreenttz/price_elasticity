@@ -179,7 +179,8 @@ class DemandModel:
         self.logger.info("Preparing features...")
 
         # All columns except target and date are features (keep product_code like original)
-        exclude = [self.target, "date", "revenue_before", "revenue_after", "product_buying_price", "cpi", "jumbo_price", "dirk_price", "dirck_iii_price", "vomar_price", "lidl_price", "ah_price", "gall_gall_price", "valid_from", "valid_to", "product_id", "yearweek"]
+        comp_price_cols = [f"{c}_price" for c in self.competitors]
+        exclude = [self.target, "date", "revenue_before", "revenue_after", "product_buying_price", "cpi", "valid_from", "valid_to", "product_id", "yearweek"] + comp_price_cols
         self.features = [c for c in self.data.columns if c not in exclude]
 
         # Convert object columns to category
@@ -284,7 +285,8 @@ class DemandModel:
         self._update_price_features(result)
 
         # Set promotion to False for simulation
-        result["promotion_indicator"] = False
+        if "promotion_indicator" in result.columns:
+            result["promotion_indicator"] = False
 
         return result
 
@@ -328,8 +330,48 @@ class DemandModel:
                 df[dist_col] = np.where(
                     avg_price > 0,
                     (own_price - comp_price) / avg_price,
-                    0,
+                    np.nan,
                 )
+
+        # Recompute aggregate distance features for the simulated own prices
+        dist_cols = [f"price_distance_{c}" for c in self.competitors if f"price_distance_{c}" in df.columns]
+        comp_price_cols = [f"{c}_price" for c in self.competitors if f"{c}_price" in df.columns]
+
+        if dist_cols:
+            distances = df[dist_cols]
+            own_price = df[self.price_column]
+
+            if comp_price_cols:
+                comp_prices = df[comp_price_cols]
+
+                cheapest_comp = comp_prices.min(axis=1)
+                avg_cheapest = (own_price + cheapest_comp) / 2
+                df["price_distance_cheapest"] = np.where(
+                    avg_cheapest > 0,
+                    (own_price - cheapest_comp) / avg_cheapest,
+                    np.nan,
+                )
+
+                most_expensive_comp = comp_prices.max(axis=1)
+                avg_most_expensive = (own_price + most_expensive_comp) / 2
+                df["price_distance_most_expensive"] = np.where(
+                    avg_most_expensive > 0,
+                    (own_price - most_expensive_comp) / avg_most_expensive,
+                    np.nan,
+                )
+
+            df["price_distance_mean"] = distances.mean(axis=1)
+            df["n_competitors_cheaper"] = (distances > 0).sum(axis=1)
+            df["n_competitors_available"] = distances.notna().sum(axis=1)
+
+        # Update log price features for simulated own price
+        if "log_own_price" in df.columns:
+            own_price = df[self.price_column]
+            df["log_own_price"] = np.where(own_price > 0, np.log(own_price), np.nan)
+
+        if "log_comp_index" in df.columns and "log_own_price" in df.columns:
+            df["log_relative_price"] = df["log_own_price"] - df["log_comp_index"]
+            
 
     # -------------------------------------------------------------------------
     # Model Training
@@ -359,8 +401,19 @@ class DemandModel:
         # Transform target (log1p for count data)
         y_train_transformed = np.log1p(self.y_train)
 
+        # Compute sample weights: upweight price-change days
+        price_change_weight = self.config.get("price_change_weight", 1)
+        if price_change_weight > 1:
+            lag1_col = f"price_change_{self.price_column}_lag_1"
+            price_changed = self.x_train.get(lag1_col, pd.Series(0, index=self.x_train.index)).fillna(0).ne(0)
+            sample_weight = np.where(price_changed, price_change_weight, 1)
+            self.logger.info(f"Applying price_change_weight={price_change_weight} to {price_changed.sum():,} price-change days")
+        else:
+            sample_weight = None
+
+
         # Fit
-        self.model.fit(self.x_train, y_train_transformed)
+        self.model.fit(self.x_train, y_train_transformed, sample_weight=sample_weight)
 
         self.logger.info("Model trained successfully")
 
@@ -379,15 +432,14 @@ class DemandModel:
             holdout_r2 = float(r2_score(y_holdout, y_pred))
 
             self.logger.info(f"Holdout R^2 at actual prices: {holdout_r2:.4f}")
-            self.logger.info("No leakage detected")
 
             if holdout_r2 <= warn_threshold:
-                self.loggerinfo(f"Holdout R^2={holdout_r2:.4f} is below warning threshold ({warn_threshold}). No leakage detection")
+                self.logger.info(f"Holdout R^2={holdout_r2:.4f} is below warning threshold ({warn_threshold}). No leakage detected.")
             elif holdout_r2 > warn_threshold:
                 top5 = {}
                 try:
                     explainer = shap.TreeExplainer(self.model)
-                    sample = x_holdout.sample(2000, random_state=42)
+                    sample = x_holdout.sample(min(2000, len(x_holdout)), random_state=42)
                     shap_values = explainer.shap_values(sample)
                     top5 = pd.Series(
                         np.abs(shap_values).mean(axis=0), index=self.x_train.columns

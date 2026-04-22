@@ -354,7 +354,7 @@ class ElasticityCalculator:
         numerator = agg["n"] * agg["sum_xy"] - agg["sum_x"] * agg["sum_y"]
         slope = numerator / denominator 
         # Invalidate slopes where fewer than 2 points or no price variance
-        slope = slope.where((agg["n"] >= 2) & (denom != 0)
+        slope = slope.where((agg["n"] >= 2) & (denominator != 0))
         
         # Compute std of daily slopes per product 
         slope_df = slope.reset_index(name="slope")
@@ -409,71 +409,68 @@ class ElasticityCalculator:
     # -------------------------------------------------------------------------
 
     def _calculate_elasticities_per_category(self) -> None:
-          """Aggregate elasticities by category using revenue-weighted average."""
-        
-          if self.elasticity_df.empty:
-              self.elasticities_by_category = pd.DataFrame()
-              return
-        
-          valid_elasticities = self.elasticity_df.copy()
-        
-          revenue_col = "revenue_before" if "revenue_before" in self.preprocessed_data.columns else "revenue_after"
-        
-          # Compute total revenue per product across all dates
-          product_revenue = (
-              self.preprocessed_data.groupby("product_code")[revenue_col]
-              .sum()
-              .reset_index()
-              .rename(columns={revenue_col: "total_revenue"})
-          )
-        
-          # Merge elasticities with category and revenue
-          merged = pd.merge(
-              valid_elasticities,
-              self.preprocessed_data[["product_code", self.category_column]].drop_duplicates(),
-              on="product_code",
-              how="left",
-          )
-          merged = pd.merge(merged, product_revenue, on="product_code", how="left")
-        
-          # Vectorized weighted average
-          merged["weighted_elasticity"] = merged["elasticity"] * merged["total_revenue"]
-        
-          self.elasticities_by_category = merged.groupby(self.category_column).agg(
-              weighted_elasticity_sum=("weighted_elasticity", "sum"),
-              total_revenue_sum=("total_revenue", "sum"),
-              elasticity_median=("elasticity", "median"),
-              elasticity_mean=("elasticity", "mean"),
-              num_products=("product_code", "nunique"),
-          ).reset_index()
-        
-          self.elasticities_by_category["elasticity_weighted"] = (
-              self.elasticities_by_category["weighted_elasticity_sum"] / self.elasticities_by_category["total_revenue_sum"]
-          )
-          self.elasticities_by_category = self.elasticities_by_category.drop(
-              columns=["weighted_elasticity_sum", "total_revenue_sum"]
-          )
-        
-          # Round values
-          for col in ["elasticity_weighted", "elasticity_median", "elasticity_mean"]:
-              self.elasticities_by_category[col] = self.elasticities_by_category[col].round(2)
-        
-          # Filter categories with enough products
-          min_products = 5
-          self.elasticities_by_category = self.elasticities_by_category[
-              self.elasticities_by_category["num_products"] >= min_products
-              ]
-        
-          self.elasticities_by_category = self.elasticities_by_category.sort_values("elasticity_weighted").reset_index(drop=True)
-        
-          # Add client metadata
-          self.elasticities_by_category = self.client.add_output_metadata(
-              self.elasticities_by_category
-          )
-        
-        # self.logger.info(
-        #     f"Calculated elasticities for {len(self.elasticities_by_category)} categories"
-        # )
+        """Aggregate elasticities by category using revenue-weighted average."""
+    
+        if self.elasticity_df.empty:
+            self.elasticities_by_category = pd.DataFrame()
+            return
+    
+        valid_elasticities = self.elasticity_df.copy()
+    
+        revenue_col = "revenue_before" if "revenue_before" in self.preprocessed_data.columns else "revenue_after"
+    
+        # Compute total revenue per product across all dates
+        product_revenue = (
+            self.preprocessed_data.groupby("product_code")[revenue_col]
+            .sum()
+            .reset_index()
+            .rename(columns={revenue_col: "total_revenue"})
+        )
+    
+        # Merge elasticities with category and revenue
+        merged = pd.merge(
+            valid_elasticities,
+            self.preprocessed_data[["product_code", self.category_column]].drop_duplicates(),
+            on="product_code",
+            how="left",
+        )
+        merged = pd.merge(merged, product_revenue, on="product_code", how="left")
+    
+        # Vectorized weighted average
+        merged["weighted_elasticity"] = merged["elasticity"] * merged["total_revenue"]
+    
+        self.elasticities_by_category = merged.groupby(self.category_column).agg(
+            weighted_elasticity_sum=("weighted_elasticity", "sum"),
+            total_revenue_sum=("total_revenue", "sum"),
+            elasticity_median=("elasticity", "median"),
+            elasticity_mean=("elasticity", "mean"),
+            num_products=("product_code", "nunique"),
+        ).reset_index()
+    
+        self.elasticities_by_category["elasticity_weighted"] = (
+            self.elasticities_by_category["weighted_elasticity_sum"] / self.elasticities_by_category["total_revenue_sum"]
+        )
+        self.elasticities_by_category = self.elasticities_by_category.drop(
+            columns=["weighted_elasticity_sum", "total_revenue_sum"]
+        )
+    
+        # Round values
+        for col in ["elasticity_weighted", "elasticity_median", "elasticity_mean"]:
+            self.elasticities_by_category[col] = self.elasticities_by_category[col].round(2)
+    
+        # Filter categories with enough products
+        min_products = 5
+        self.elasticities_by_category = self.elasticities_by_category[
+            self.elasticities_by_category["num_products"] >= min_products
+            ]
+    
+        self.elasticities_by_category = self.elasticities_by_category.sort_values("elasticity_weighted").reset_index(drop=True)
+    
+        # Add client metadata
+        self.elasticities_by_category = self.client.add_output_metadata(
+            self.elasticities_by_category
+        )
+    
 
     # -------------------------------------------------------------------------
     # Reporting

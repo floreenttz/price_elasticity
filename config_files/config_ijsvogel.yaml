@@ -1,30 +1,32 @@
-client_name: 'hoogvliet'
-price_grid_freq: 14
+client_name: 'ijsvogel'
+price_grid_freq: 7
 price_column: 'product_selling_price'
 target: 'quantity_sold'
-competitors: ['ah', 'lidl', 'dirck_iii', 'vomar', 'gall_gall', 'jumbo', 'dirk']
+competitors: ['zooplus', 'intratuin', 'welkoop', 'ranzijn', 'plein', 'brekz', 'hornbach', 'medpets', 'maxizoo', 'google_shopping_median']
 competitor_info: True
 category: 'category_name_level3'
-    
+
 # Data preprocessing
 filters:
-    filter_product_status: True
-    filter_live_products: True
+    filter_product_status: False
+    filter_live_products: False
     filter_sufficient_price_levels: True
+    sufficient_price_levels: 2
     filter_low_selling_products: True
     filter_price_range: True
-    min_sales: 10
-    cpi: True
-    
+    min_sales: 1
+    cpi: False
+
 # Feature Engineering
 out_of_stock_days: 7
-ignore_out_of_stock_days: 2
-price_lags: [1, 2, 3, 4, 5, 6, 7, 14, 21, 28] #, 90, 180, 365
-price_change_columns: ['product_selling_price', 'adjusted_price'] #'adjusted_price_category', 'product_selling_price', 
-min_grid_perc: -10
-max_grid_perc: 10
+ignore_out_stock_days: 2
+price_lags: [1, 2, 3, 4, 5, 6, 7, 14, 21, 28]
+price_change_columns: ['product_selling_price']
+min_grid_perc: -7
+max_grid_perc: 7
 test_end_date: '2025-10-26'
 updated: False
+
 # Modeling
 test_size: 50000
 n_splits: 3
@@ -32,22 +34,20 @@ optuna: False
 optuna_trials: 100
 leakage_warn_r2: 0.82
 leakage_alert_r2: 0.87
-price_change_weight: 1
+price_change_weight: 6
 
 # Elasticity
 prods_per_category: 1
-min_quality_tier: null # options: 'high', 'medium', null (no filtering)
+min_quality_tier: null
 
 # S3 data
-s3_dir: 
+s3_dir:
     s3: 's3://'
-    bucket: 'prime-rel-hoogvliet'
-    data_prefix: 'prime/platform/temp/daily_sales/sales_with_competitors/'
-    # s3: 's3://'
-    # bucket: 'prime-rel-ml/'
-    # data_prefix: 'data-analytics/price-elasticity/hoogvliet/data/'
-    model_prefix: 'data-analytics/price-elasticity/hoogvliet/model/'
-    output_prefix: 'data-analytics/price-elasticity/hoogvliet/pe_results/'
+    bucket: 'prime-rel-ijsvogel'
+    data_prefix: 'prime/platform/temp/ijsvogel_price_elasticity_with_competitors.parquet'
+    model_prefix: 'data-analytics/price-elasticity/ijsvogel/model/'
+    output_prefix: 'data-analytics/price-elasticity/ijsvogel/pe_results/'
+    artifacts_prefix: 'data-analytics/price-elasticity/ijsvogel/artifacts/'
     feature_data: 'feature_data.parquet'
     feature_data_weekly: 'feature_data_weekly.parquet'
     preprocessed_data: 'preprocessed_data.parquet'
@@ -61,4 +61,4 @@ s3_dir:
     elasticities_weekly: 'elasticities_weekly.parquet'
     
 data_folder: 's3://prime-rel-ml/data-analytics/price-elasticity/data/'
-
+    

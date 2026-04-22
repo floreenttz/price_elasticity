@@ -39,13 +39,21 @@ class ClientAdapter(Protocol):
         """Column name for product price."""
         ...
 
-    def load_raw_data(self, config: dict, storage: Storage) -> pd.DataFrame:
+    def load_raw_data(
+        self,
+        config: dict,
+        storage: Storage,
+        subset: bool = False,
+        chunk_size: int = 10,
+    ) -> pd.DataFrame:
         """
         Load raw sales data for this client.
 
         Args:
             config: Configuration dictionary with paths and settings.
             storage: Storage backend for reading files.
+            subset: If True, load a random 50% sample (for testing)
+            chunk_size: Number of files to process per chunk (where applicable).
 
         Returns:
             Raw sales DataFrame.
@@ -66,7 +74,7 @@ class ClientAdapter(Protocol):
         """
         ...
 
-    def get_artifact_path(self, artifact: str, config: dict) -> str:
+    def get_artifact_path(self, artifact: str, config: dict, frequency: str = "daily") -> str:
         """
         Get the storage path for a pipeline artifact.
 
@@ -74,6 +82,7 @@ class ClientAdapter(Protocol):
             artifact: Artifact identifier (e.g., 'preprocessed_data', 'feature_data',
                      'estimations', 'elasticities', 'price_grid', 'model').
             config: Configuration dictionary with base paths.
+            frequency: 'daily' or 'weekly'
 
         Returns:
             Full storage path for the artifact.
